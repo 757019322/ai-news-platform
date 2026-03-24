@@ -6,7 +6,7 @@ A full-stack news platform with AI-powered semantic search and article recommend
 
 - App: http://18.217.82.42  
 - API Docs: http://18.217.82.42/docs
-- Status: Live on AWS EC2 (may take a few seconds to wake up)  
+- Status: Live on AWS EC2
 
 ## Highlights
 
