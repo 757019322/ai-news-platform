@@ -4,8 +4,8 @@ A full-stack news platform with AI-powered semantic search and article recommend
 
 ## Live Demo
 
-- App: http://http://3.17.170.220/ 
-- API Docs: http://http://3.17.170.220//docs
+- App: http://3.17.170.220/ 
+- API Docs: http://3.17.170.220/docs
 - Status: Live on AWS EC2
 
 ## Highlights
