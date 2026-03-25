@@ -4,8 +4,8 @@ A full-stack news platform with AI-powered semantic search and article recommend
 
 ## Live Demo
 
-- App: http://18.217.82.42  
-- API Docs: http://18.217.82.42/docs
+- App: http://3.133.90.199 
+- API Docs: http://3.133.90.199/docs
 - Status: Live on AWS EC2
 
 ## Highlights
@@ -210,7 +210,7 @@ Cost: `text-embedding-3-small` ≈ $0.02 per 1M tokens. Embedding 10,000 article
 
 Full spec: [`api-docs/api-spec.md`](api-docs/api-spec.md)  
 Interactive (local): http://localhost:8000/docs  
-Production: http://18.217.82.42/docs
+Production: http://3.133.90.199/docs
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
