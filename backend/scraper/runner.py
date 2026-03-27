@@ -13,7 +13,16 @@ from scraper.newsapi_client import fetch_newsapi
 from scraper.rss_client import fetch_rss
 from scraper.sources import RSS_SOURCES
 
+AD_KEYWORDS = [
+    "promo code", "coupon", "% off", "save up to",
+    "discount code", "deal of the day", "voucher"
+]
+
 logger = logging.getLogger(__name__)
+
+def is_ad(title: str) -> bool:
+    title_lower = title.lower()
+    return any(kw in title_lower for kw in AD_KEYWORDS)
 
 
 async def _get_or_create_category(db: AsyncSession, name: str) -> Category:
@@ -40,6 +49,9 @@ async def _insert_articles(
     for article in articles:
         title = article["title"]
         if title in existing_titles:
+            continue
+
+        if is_ad(title):
             continue
 
         news = News(
