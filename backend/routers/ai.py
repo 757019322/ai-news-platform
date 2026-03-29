@@ -12,6 +12,10 @@ from models.news import News
 from services.embedding import embed_text, get_index
 from utils.response import success_response
 
+import os
+from openai import AsyncOpenAI
+from pydantic import BaseModel
+
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/ai", tags=["AI"])
@@ -114,4 +118,61 @@ async def related_articles(
     return success_response(
         message="Related articles fetched.",
         data={"list": _serialize(articles), "total": len(articles)},
+    )
+
+class ChatRequest(BaseModel):
+    question: str
+
+
+@router.post("/chat")
+async def ai_chat(
+    body: ChatRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    question = body.question.strip()
+    if not question:
+        raise HTTPException(status_code=400, detail="Question cannot be empty.")
+
+    index = get_index()
+    if index.size == 0:
+        return success_response(
+            message="Chat response generated.",
+            data={"answer": "The news index is not ready yet. Please try again later."},
+        )
+
+    try:
+        query_vec = await embed_text(question)
+    except Exception as exc:
+        logger.error("Embedding failed: %s", exc)
+        raise HTTPException(status_code=503, detail="Service unavailable.")
+
+    ids = index.search(query_vec, k=5)
+    articles = await _fetch_articles(db, ids)
+
+    context = "\n\n".join([
+        f"Title: {a.title}\n{a.description or ''}"
+        for a in articles
+    ])
+
+    client = AsyncOpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+    response = await client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {
+                "role": "system",
+                "content": "You are a news assistant. Answer user questions based on the provided news articles. If the articles do not contain relevant information, say so clearly. Keep your answer within 150 words in English or 100 Chinese characters. Do not cut off mid-sentence."
+            },
+            {
+                "role": "user",
+                "content": f"Here are the relevant news articles:\n\n{context}\n\nUser question: {question}"
+            }
+        ],
+        max_tokens=300,
+    )
+
+    answer = response.choices[0].message.content
+
+    return success_response(
+        message="Chat response generated.",
+        data={"answer": answer},
     )
