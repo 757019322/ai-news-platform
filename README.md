@@ -24,14 +24,19 @@ A full-stack news platform with AI-powered semantic search and article recommend
 │                     │                 │                          │
 │  • Browse by topic  │  /api/ai/search │  OpenAI text-embedding   │
 │  • Semantic search  │  /api/ai/related│  FAISS vector index      │
-│  • Related articles │                 │  RSS + NewsAPI scraper   │
+│  • Related articles │  /api/ai/chat   │  RSS + NewsAPI scraper   │
+│  • AI Chat Widget   │                 │  GPT-4o-mini (RAG)       │
 └─────────────────────┘                 └──────────────────────────┘
+         │                                          │
+         └──────────────── Nginx ───────────────────┘
+                      (AWS EC2, Docker Compose)
 ```
 
 ## Features
 
 | Feature | Description |
 |---------|-------------|
+| **AI Chat (RAG)** | Ask questions in natural language — retrieves top-5 relevant articles via FAISS and feeds them to GPT-4o-mini for grounded answers |
 | **Semantic Search** | Natural language search via OpenAI embeddings + FAISS — finds meaning, not just keywords |
 | **Related Articles** | Per-article recommendations using cosine similarity on pre-computed embeddings |
 | **News Scraping** | Auto-scrapes RSS feeds + NewsAPI on startup and refreshes content twice daily |
@@ -52,42 +57,42 @@ A full-stack news platform with AI-powered semantic search and article recommend
 
 ## Quick Start
 
-### 1. Clone and configure
+### Option A — Docker Compose (recommended)
 
 ```bash
 git clone https://github.com/757019322/ai-news-platform.git
 cd ai-news-platform
 
+cp env.docker .env
+# Edit .env with your OPENAI_API_KEY and NEWS_API_KEY
+```
+
+```bash
+docker compose up --build -d
+```
+
+This starts two containers: `backend` (FastAPI on port 8000) and `db` (MySQL 8). On first startup the backend will:
+1. Wait for MySQL to be ready, then run schema migrations
+2. Scrape latest news from RSS feeds + NewsAPI
+3. Embed all articles via OpenAI and build the FAISS index
+4. Start the cron scheduler (refreshes content twice daily)
+
+Interactive API docs: **http://localhost:8000/docs**
+
+### Option B — Local (without Docker)
+
+```bash
 cp backend/.env.example backend/.env
 # Edit backend/.env with your credentials
-```
 
-### 2. Create the database
-
-```bash
 mysql -u root -p < database/database.sql
-```
 
-### 3. Install dependencies and run
-
-```bash
 cd backend
 pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-On startup the server will:
-1. Scrape latest tech news from RSS + NewsAPI
-2. Embed all articles via OpenAI and build the FAISS index
-3. Start the cron scheduler (runs twice daily)
-
-### 4. Open the frontend
-
-For local development, open `frontend/news-frontend-ai.html` directly in a browser.
-In production, the frontend is served via Nginx on EC2.
-
-Interactive API docs (local): **http://localhost:8000/docs**  
-Production: **http://3.17.170.220/docs**
+Open `frontend/news-frontend-ai.html` directly in a browser for local development.
 
 ## Environment Variables
 
@@ -107,6 +112,25 @@ Copy `backend/.env.example` to `backend/.env` and fill in:
 | `DEBUG` | | Set `true` to expose error details in responses |
 
 ## AI Features
+
+### AI Chat (RAG) — `POST /api/ai/chat`
+
+Ask a question in natural language. The backend embeds the query, retrieves the top-5 most relevant articles from the FAISS index, and feeds them as context to GPT-4o-mini to produce a grounded answer.
+
+```bash
+curl -X POST "http://localhost:8000/api/ai/chat" \
+  -H "Content-Type: application/json" \
+  -d '{"question": "What are the latest developments in AI chips?"}'
+```
+
+```json
+{
+  "code": 200,
+  "data": {
+    "answer": "According to recent reports, NVIDIA announced its next-gen Blackwell architecture..."
+  }
+}
+```
 
 ### Semantic Search — `GET /api/ai/search?q=...`
 
@@ -168,12 +192,14 @@ Cost: `text-embedding-3-small` ≈ $0.02 per 1M tokens. Embedding 10,000 article
 
 ## Deployment
 
-### Production (AWS EC2)
+### Production (AWS EC2 + Docker Compose)
 
-- Backend: FastAPI (Uvicorn) running on EC2  
-- Frontend: Served via Nginx  
-- Reverse proxy: `/api/*` → `localhost:8000`  
-- Database: MySQL (local instance)  
+- **Instance**: t3.small, Ubuntu 24.04, Elastic IP `3.17.170.220`
+- **Containers**: `docker compose up -d` — backend (FastAPI) + db (MySQL 8)
+- **Frontend**: Static HTML served by Nginx
+- **Reverse proxy**: Nginx routes `/api/*` → `localhost:8000`, `/` → frontend
+- **Persistence**: MySQL data on EBS volume (expanded zero-downtime via `growpart` + `resize2fs`)
+- **Auto-restart**: Docker `restart: always` policy keeps services up across reboots
 
 ## Project Structure
 
@@ -214,6 +240,7 @@ Production: http://3.17.170.220/docs
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
+| POST | `/api/ai/chat` | — | RAG-based Q&A chat |
 | GET | `/api/ai/search?q=` | — | Semantic search |
 | GET | `/api/ai/related?newsId=` | — | Related articles |
 | GET | `/api/news/categories` | — | List categories |
