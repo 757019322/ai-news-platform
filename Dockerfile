@@ -28,11 +28,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy installed packages from builder
 COPY --from=builder /install /usr/local
 
-# Copy backend source
+# Copy backend source + frontend (served by FastAPI at /)
 COPY backend/ .
+COPY frontend/ ./frontend/
 
-# Non-root user for security
-RUN useradd -m appuser && chown -R appuser:appuser /app
+# Non-root user for security; faiss_index dir is the persisted volume
+RUN useradd -m appuser && mkdir -p /app/faiss_index && chown -R appuser:appuser /app
 USER appuser
 
 EXPOSE 8000

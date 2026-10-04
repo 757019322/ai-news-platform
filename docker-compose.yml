@@ -1,4 +1,7 @@
-version: "3.9"
+# Local setup: everything runs on your own machine.
+#   cp env.docker .env   (fill in OPENAI_API_KEY etc.)
+#   docker compose up --build -d
+#   open http://localhost:8000
 
 services:
   # ── MySQL ─────────────────────────────────────────────────────────
@@ -13,7 +16,8 @@ services:
       - mysql_data:/var/lib/mysql
       - ./database/database.sql:/docker-entrypoint-initdb.d/init.sql:ro
     ports:
-      - "3306:3306"
+      # 只绑定本机；本机已经有 MySQL 占用 3306 的话，在 .env 里改 DB_HOST_PORT
+      - "127.0.0.1:${DB_HOST_PORT:-3306}:3306"
     healthcheck:
       test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-u", "root", "-p${DB_PASSWORD}"]
       interval: 10s
@@ -21,7 +25,7 @@ services:
       retries: 5
       start_period: 30s
 
-  # ── FastAPI ───────────────────────────────────────────────────────
+  # ── FastAPI (API + frontend) ──────────────────────────────────────
   backend:
     build:
       context: .
@@ -34,8 +38,10 @@ services:
       # 覆盖 DB_HOST 指向容器内的 db 服务
       DB_HOST: db
       DB_PORT: "3306"
+      # FAISS 索引写到 volume 里，重启不用重新建
+      FAISS_INDEX_PATH: /app/faiss_index/faiss.index
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${APP_PORT:-8000}:8000"
     depends_on:
       db:
         condition: service_healthy    # 等 MySQL 健康才启动

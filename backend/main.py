@@ -3,9 +3,11 @@ from __future__ import annotations
 import logging
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from routers import ai, favorite, history, news, users
 from scraper.runner import run_scraper
@@ -14,6 +16,21 @@ from services.embedding import embed_all_news
 from utils.exception_handlers import register_exception_handlers
 
 logger = logging.getLogger(__name__)
+
+# Frontend is a single HTML file. Docker copies it next to main.py;
+# running from source it lives in ../frontend.
+_BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_FILE = next(
+    (
+        p
+        for p in (
+            _BASE_DIR / "frontend" / "news-frontend-ai.html",
+            _BASE_DIR.parent / "frontend" / "news-frontend-ai.html",
+        )
+        if p.is_file()
+    ),
+    None,
+)
 
 
 @asynccontextmanager
@@ -72,6 +89,13 @@ def create_app() -> FastAPI:
     @app.get("/health", tags=["health"])
     async def health_check():
         return {"status": "ok"}
+
+    # Serve the frontend at http://localhost:8000/ (replaces the old Nginx setup)
+    @app.get("/", include_in_schema=False)
+    async def index():
+        if FRONTEND_FILE is None:
+            raise HTTPException(status_code=404, detail="Frontend not found.")
+        return FileResponse(FRONTEND_FILE)
 
     _admin_secret = os.getenv("ADMIN_SECRET", "")
 

@@ -2,13 +2,17 @@
 
 A production-ready AI news platform with RAG-based Q&A chat, semantic search over 10k+ articles, and sub-second retrieval using FAISS.
 
-Built with FastAPI, MySQL, OpenAI embeddings, and deployed on AWS EC2.
+Built with FastAPI, MySQL and OpenAI embeddings. Runs locally with one command via Docker Compose (previously deployed on AWS EC2).
 
-## Live Demo
+## Run It Locally
 
-- App: http://3.17.170.220/
-- API Docs: http://3.17.170.220/docs
-- Status: Live on AWS EC2
+```bash
+cp env.docker .env      # fill in OPENAI_API_KEY (NEWS_API_KEY optional)
+bash start.sh           # = docker compose up --build -d
+```
+
+- App: http://localhost:8000
+- API Docs: http://localhost:8000/docs
 
 ## Highlights
 
@@ -16,7 +20,7 @@ Built with FastAPI, MySQL, OpenAI embeddings, and deployed on AWS EC2.
 - Achieved sub-second semantic search over 10k+ articles using vector similarity (FAISS IndexFlatIP)
 - Built async ingestion pipeline (RSS + NewsAPI) with scheduled jobs and automatic embedding updates
 - Implemented fault-tolerant AI services with graceful degradation when OpenAI API fails
-- Containerized with Docker Compose and deployed on AWS EC2 with Nginx reverse proxy
+- Containerized with Docker Compose — one command brings up MySQL + API + frontend
 
 ```
 ┌─────────────────────┐    HTTP/JSON    ┌──────────────────────────┐
@@ -28,8 +32,8 @@ Built with FastAPI, MySQL, OpenAI embeddings, and deployed on AWS EC2.
 │  • AI Chat Widget   │                 │  GPT-4o-mini (RAG)       │
 └─────────────────────┘                 └──────────────────────────┘
          │                                          │
-         └──────────────── Nginx ───────────────────┘
-                      (AWS EC2, Docker Compose)
+         └──── served by FastAPI at localhost:8000 ─┘
+                   (Docker Compose, local)
 ```
 
 ## Performance
@@ -62,7 +66,7 @@ Built with FastAPI, MySQL, OpenAI embeddings, and deployed on AWS EC2.
 | Database | MySQL 8+ |
 | AI / Search | OpenAI `text-embedding-3-small` + FAISS `IndexFlatIP` |
 | Scraping | feedparser (RSS) + NewsAPI + APScheduler |
-| Infrastructure | Docker Compose, AWS EC2, Nginx |
+| Infrastructure | Docker Compose (local) |
 
 ## Quick Start
 
@@ -77,16 +81,18 @@ cp env.docker .env
 ```
 
 ```bash
-docker compose up --build -d
+bash start.sh            # or: docker compose up --build -d
 ```
 
-This starts two containers: `backend` (FastAPI on port 8000) and `db` (MySQL 8). On first startup the backend will:
+This starts two containers: `backend` (FastAPI + frontend on port 8000) and `db` (MySQL 8). Both ports are bound to `127.0.0.1` only. On first startup the backend will:
 1. Wait for MySQL to be ready, then run schema migrations
 2. Scrape latest news from RSS feeds + NewsAPI
 3. Embed all articles via OpenAI and build the FAISS index
 4. Start the cron scheduler (refreshes content twice daily)
 
-Interactive API docs: **http://localhost:8000/docs**
+Open the app at **http://localhost:8000** — API docs at **http://localhost:8000/docs**.
+
+Stop everything with `bash start.sh down` (data is kept in Docker volumes). If port 3306 or 8000 is already taken on your machine, change `DB_HOST_PORT` / `APP_PORT` in `.env`.
 
 ### Option B — Local (without Docker)
 
@@ -98,10 +104,10 @@ mysql -u root -p < database/database.sql
 
 cd backend
 pip install -r requirements.txt
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+uvicorn main:app --reload --host 127.0.0.1 --port 8000
 ```
 
-Open `frontend/news-frontend-ai.html` directly in a browser for local development.
+Then open http://localhost:8000 — the backend serves the frontend too. (Opening `frontend/news-frontend-ai.html` directly as a file also works; it falls back to `http://localhost:8000` for the API.)
 
 ## Environment Variables
 
@@ -200,14 +206,15 @@ curl "http://localhost:8000/api/ai/related?newsId=42&limit=5"
 
 ## Deployment
 
-### Production (AWS EC2 + Docker Compose)
+### Current: local (Docker Compose)
 
-- **Instance**: t3.small, Ubuntu 24.04, Elastic IP `3.17.170.220`
-- **Containers**: `docker compose up -d` — backend (FastAPI) + db (MySQL 8)
-- **Frontend**: Static HTML served by Nginx
-- **Reverse proxy**: Nginx routes `/api/*` → `localhost:8000`, `/` → frontend
-- **Persistence**: MySQL data on EBS volume (expanded zero-downtime via `growpart` + `resize2fs`)
-- **Auto-restart**: Docker `restart: always` policy keeps services up across reboots
+- **Containers**: `db` (MySQL 8) + `backend` (FastAPI, also serves the frontend at `/`)
+- **Persistence**: MySQL data in the `mysql_data` volume, FAISS index in the `faiss_data` volume
+- **Ports**: bound to `127.0.0.1` only — not exposed to your network
+
+### Previously: AWS EC2 (retired)
+
+The project ran on an AWS EC2 t3.small (Ubuntu 24.04) with the same Docker Compose stack behind an Nginx reverse proxy, MySQL data on an EBS volume (expanded zero-downtime via `growpart` + `resize2fs`). The instance has been shut down; the public demo URL no longer works.
 
 ## Project Structure
 
@@ -234,6 +241,8 @@ curl "http://localhost:8000/api/ai/related?newsId=42&limit=5"
 │   └── .env.example
 ├── database/
 │   └── database.sql                # Schema (run once to set up)
+├── docker-compose.yml              # Local stack: MySQL + backend
+├── start.sh                        # Local one-command start / stop
 ├── api-docs/
 │   └── api-spec.md
 ├── backend-design.md
@@ -243,8 +252,7 @@ curl "http://localhost:8000/api/ai/related?newsId=42&limit=5"
 ## API Reference
 
 Full spec: [`api-docs/api-spec.md`](api-docs/api-spec.md)  
-Interactive (local): http://localhost:8000/docs  
-Production: http://3.17.170.220/docs
+Interactive (local): http://localhost:8000/docs
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|

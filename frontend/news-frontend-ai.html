@@ -371,7 +371,8 @@
 <div class="toast" id="toast"></div>
 
 <script>
-const API = '';
+// Same origin when served by the backend (http://localhost:8000); fallback when the file is opened directly.
+const API = location.protocol === 'file:' ? 'http://localhost:8000' : '';
 let token = localStorage.getItem('news_token') || null;
 let currentUser = JSON.parse(localStorage.getItem('news_user') || 'null');
 let currentCategory = null, currentPage = 1, totalNews = 0;
